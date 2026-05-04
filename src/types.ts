@@ -1,4 +1,6 @@
 export type ConnectorType = "CCS2" | "Type 2" | "CHAdeMO" | "Tesla" | "GB/T";
+export type StationStatusSource = "seed data" | "station telemetry" | "demo telemetry";
+export type ReportAction = "charging" | "left" | "full" | "available";
 
 export type Coordinates = {
   lat: number;
@@ -15,13 +17,22 @@ export type Station = Coordinates & {
   costPerKwh: number;
   connectorTypes: ConnectorType[];
   updatedAt: string;
-  reportSource: "demo seed" | "demo simulation" | "crowd report";
+  statusSource: StationStatusSource;
 };
 
 export type StationStatusOverlay = {
   availableSlots: number;
   updatedAt: string;
-  reportSource: Station["reportSource"];
+  statusSource: StationStatusSource;
+};
+
+export type CommunityReport = {
+  id: string;
+  stationId: string;
+  stationName: string;
+  action: ReportAction;
+  label: string;
+  createdAt: string;
 };
 
 export type RankedStation = Station & {

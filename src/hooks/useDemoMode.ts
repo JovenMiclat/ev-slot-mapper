@@ -46,7 +46,7 @@ export const useDemoMode = (enabled: boolean) => {
       statusByStation[station.id] = {
         availableSlots,
         updatedAt: new Date(Date.now() - index * 90000).toISOString(),
-        reportSource: "demo simulation"
+        statusSource: "demo telemetry"
       };
 
       return statusByStation;

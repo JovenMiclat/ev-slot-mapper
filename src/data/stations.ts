@@ -17,7 +17,7 @@ export const stations: Station[] = [
     costPerKwh: 28,
     connectorTypes: ["CCS2", "Type 2"],
     updatedAt: "demo seed",
-    reportSource: "demo seed"
+    statusSource: "seed data"
   },
   {
     id: "makati-02",
@@ -30,7 +30,7 @@ export const stations: Station[] = [
     costPerKwh: 31,
     connectorTypes: ["CCS2", "CHAdeMO"],
     updatedAt: "demo seed",
-    reportSource: "demo seed"
+    statusSource: "seed data"
   },
   {
     id: "ortigas-03",
@@ -43,7 +43,7 @@ export const stations: Station[] = [
     costPerKwh: 26,
     connectorTypes: ["Type 2"],
     updatedAt: "demo seed",
-    reportSource: "demo seed"
+    statusSource: "seed data"
   },
   {
     id: "moa-04",
@@ -56,7 +56,7 @@ export const stations: Station[] = [
     costPerKwh: 34,
     connectorTypes: ["CCS2", "Type 2", "GB/T"],
     updatedAt: "demo seed",
-    reportSource: "demo seed"
+    statusSource: "seed data"
   },
   {
     id: "qc-05",
@@ -69,7 +69,7 @@ export const stations: Station[] = [
     costPerKwh: 29,
     connectorTypes: ["CCS2", "Tesla"],
     updatedAt: "demo seed",
-    reportSource: "demo seed"
+    statusSource: "seed data"
   },
   {
     id: "alabang-06",
@@ -82,6 +82,6 @@ export const stations: Station[] = [
     costPerKwh: 27,
     connectorTypes: ["CCS2", "Type 2"],
     updatedAt: "demo seed",
-    reportSource: "demo seed"
+    statusSource: "seed data"
   }
 ];

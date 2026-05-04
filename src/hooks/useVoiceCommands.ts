@@ -12,6 +12,12 @@ type VoiceCommandOptions = {
   onShowAvailable: () => void;
 };
 
+type VoiceMessage = {
+  id: string;
+  role: "driver" | "assistant";
+  text: string;
+};
+
 const getSpeechRecognition = () => {
   const speechWindow = window as Window &
     typeof globalThis & {
@@ -22,13 +28,18 @@ const getSpeechRecognition = () => {
   return speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
 };
 
-const speak = (message: string) => {
+const speak = (message: string, onStart: () => void, onEnd: () => void) => {
   if (!("speechSynthesis" in window)) {
+    onEnd();
     return;
   }
 
   window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(new SpeechSynthesisUtterance(message));
+  const utterance = new SpeechSynthesisUtterance(message);
+  utterance.onstart = onStart;
+  utterance.onend = onEnd;
+  utterance.onerror = onEnd;
+  window.speechSynthesis.speak(utterance);
 };
 
 export const useVoiceCommands = ({
@@ -38,14 +49,35 @@ export const useVoiceCommands = ({
   onShowAvailable
 }: VoiceCommandOptions) => {
   const [listening, setListening] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [transcript, setTranscript] = useState("");
   const [lastCommand, setLastCommand] = useState("");
   const [lastResponse, setLastResponse] = useState("");
+  const [chatOpen, setChatOpen] = useState(false);
+  const [messages, setMessages] = useState<VoiceMessage[]>([]);
 
   const supported = useMemo(() => typeof window !== "undefined" && Boolean(getSpeechRecognition()), []);
 
   const respond = useCallback((message: string) => {
     setLastResponse(message);
-    speak(message);
+    setChatOpen(false);
+    setSpeaking(true);
+    speak(
+      message,
+      () => setSpeaking(true),
+      () => {
+        setSpeaking(false);
+        setChatOpen(true);
+        setMessages((currentMessages) => [
+          ...currentMessages,
+          {
+            id: `assistant-${Date.now()}`,
+            role: "assistant",
+            text: message
+          }
+        ]);
+      }
+    );
   }, []);
 
   const navigateToStation = useCallback(
@@ -60,7 +92,21 @@ export const useVoiceCommands = ({
   const handleCommand = useCallback(
     (command: string) => {
       const normalized = command.toLowerCase().trim();
+
+      if (!normalized) {
+        return;
+      }
+
       setLastCommand(command);
+      setTranscript(command);
+      setMessages((currentMessages) => [
+        ...currentMessages,
+        {
+          id: `driver-${Date.now()}`,
+          role: "driver",
+          text: command
+        }
+      ]);
 
       if (!rankedStations.length) {
         respond("No charging stations are loaded.");
@@ -114,18 +160,39 @@ export const useVoiceCommands = ({
 
     const recognition = new SpeechRecognition();
     recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.interimResults = true;
     recognition.lang = "en-US";
 
-    recognition.onstart = () => setListening(true);
+    recognition.onstart = () => {
+      setListening(true);
+      setTranscript("");
+      setChatOpen(false);
+    };
     recognition.onend = () => setListening(false);
     recognition.onerror = () => {
       setListening(false);
       respond("Voice command failed.");
     };
     recognition.onresult = (event) => {
-      const transcript = event.results[0]?.[0]?.transcript ?? "";
-      handleCommand(transcript);
+      let interimTranscript = "";
+      let finalTranscript = "";
+
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        const phrase = result[0]?.transcript ?? "";
+
+        if (result.isFinal) {
+          finalTranscript += phrase;
+        } else {
+          interimTranscript += phrase;
+        }
+      }
+
+      setTranscript(finalTranscript || interimTranscript);
+
+      if (finalTranscript) {
+        handleCommand(finalTranscript);
+      }
     };
 
     recognition.start();
@@ -134,8 +201,12 @@ export const useVoiceCommands = ({
   return {
     supported,
     listening,
+    speaking,
+    transcript,
     lastCommand,
     lastResponse,
+    chatOpen,
+    messages,
     startListening
   };
 };

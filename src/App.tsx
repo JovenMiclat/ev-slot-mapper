@@ -24,9 +24,10 @@ import {
 } from "lucide-react";
 import { DEMO_CENTER, stations } from "./data/stations";
 import { useDemoMode } from "./hooks/useDemoMode";
+import { useStationTelemetry } from "./hooks/useStationTelemetry";
 import { useUserLocation } from "./hooks/useUserLocation";
 import { useVoiceCommands } from "./hooks/useVoiceCommands";
-import type { Coordinates, RankedStation, Station, StationStatusOverlay } from "./types";
+import type { CommunityReport, Coordinates, RankedStation, ReportAction, Station } from "./types";
 import { isValidCoordinates, withFallbackCoordinates } from "./utils/coordinates";
 import { formatDistance } from "./utils/distance";
 import { formatPeso, formatUpdatedAt } from "./utils/format";
@@ -34,7 +35,13 @@ import { getGoogleMapsUrl, getWazeUrl } from "./utils/navigation";
 import { applyStatusOverlays, rankStations } from "./utils/ranking";
 
 type ViewMode = "list" | "map";
-type ReportAction = "charging" | "left" | "full" | "available";
+
+const reportLabels: Record<ReportAction, string> = {
+  charging: "I'm charging",
+  left: "I just left",
+  full: "Reported full",
+  available: "Reported available"
+};
 
 const getInitialDemoMode = () => {
   if (typeof window === "undefined") {
@@ -252,7 +259,7 @@ function StationCard({
       <div className="station-card__footer">
         <span>
           <Clock3 size={14} />
-          {station.reportSource}: {formatUpdatedAt(station.updatedAt)}
+          {station.statusSource}: {formatUpdatedAt(station.updatedAt)}
         </span>
         <div className="nav-actions">
           <a href={wazeUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
@@ -274,6 +281,7 @@ function DetailPane({
   qrCode,
   shareUrl,
   voice,
+  reports,
   onReport
 }: {
   station?: RankedStation;
@@ -282,10 +290,19 @@ function DetailPane({
   voice: {
     supported: boolean;
     listening: boolean;
+    speaking: boolean;
+    transcript: string;
     lastCommand: string;
     lastResponse: string;
+    chatOpen: boolean;
+    messages: Array<{
+      id: string;
+      role: "driver" | "assistant";
+      text: string;
+    }>;
     startListening: () => void;
   };
+  reports: CommunityReport[];
   onReport: (stationId: string, action: ReportAction) => void;
 }) {
   if (!station) {
@@ -331,7 +348,7 @@ function DetailPane({
       <section className="occupancy-block" aria-label="Occupancy">
         <div className="occupancy-block__label">
           <span>{occupancy}% occupied</span>
-          <span>{station.reportSource}</span>
+          <span>{station.statusSource}</span>
         </div>
         <div className="occupancy-track">
           <span style={{ width: `${occupancy}%` }} />
@@ -372,6 +389,25 @@ function DetailPane({
         </button>
       </section>
 
+      <section className="report-log" aria-label="Community report log">
+        <div className="panel-title">
+          <List size={16} />
+          <span>Community reports</span>
+        </div>
+        {reports.length > 0 ? (
+          <div className="report-log__items">
+            {reports.map((report) => (
+              <div key={report.id} className="report-log__item">
+                <span>{report.label}</span>
+                <time>{formatUpdatedAt(report.createdAt)}</time>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p>No reports yet</p>
+        )}
+      </section>
+
       <section className="voice-panel">
         <div className="panel-title">
           <Volume2 size={16} />
@@ -381,11 +417,26 @@ function DetailPane({
           <Mic size={18} />
           {voice.listening ? "Listening" : voice.supported ? "Start voice" : "Unsupported"}
         </button>
-        {(voice.lastCommand || voice.lastResponse) && (
+        {(voice.listening || voice.transcript) && (
+          <p className="live-transcript">
+            <span>{voice.listening ? "Listening" : "Heard"}</span>
+            {voice.transcript || "..."}
+          </p>
+        )}
+        {(voice.speaking || voice.lastCommand || voice.lastResponse) && (
           <p className="voice-result">
             {voice.lastCommand && <span>Heard: {voice.lastCommand}</span>}
-            {voice.lastResponse && <span>{voice.lastResponse}</span>}
+            {voice.lastResponse && <span>{voice.speaking ? "Speaking: " : ""}{voice.lastResponse}</span>}
           </p>
+        )}
+        {voice.chatOpen && voice.messages.length > 0 && (
+          <div className="voice-chat" aria-label="Voice chat transcript">
+            {voice.messages.slice(-4).map((message) => (
+              <div key={message.id} className={`voice-chat__bubble voice-chat__bubble--${message.role}`}>
+                {message.text}
+              </div>
+            ))}
+          </div>
         )}
       </section>
 
@@ -409,11 +460,12 @@ export default function App() {
   );
   const [availableOnly, setAvailableOnly] = useState(false);
   const [selectedId, setSelectedId] = useState(stations[0]?.id ?? "");
-  const [manualOverlays, setManualOverlays] = useState<Record<string, StationStatusOverlay>>({});
+  const [communityReports, setCommunityReports] = useState<CommunityReport[]>([]);
   const [qrCode, setQrCode] = useState("");
   const [shareUrl, setShareUrl] = useState("");
 
   const demo = useDemoMode(demoMode);
+  const telemetryOverlays = useStationTelemetry(stations);
   const location = useUserLocation(demoMode, demo.coords);
   const safeUserCoords = useMemo(
     () => withFallbackCoordinates(location.coords, DEMO_CENTER),
@@ -472,8 +524,8 @@ export default function App() {
   }, [demoMode]);
 
   const effectiveStations = useMemo(
-    () => applyStatusOverlays(stations, { ...demo.overlays, ...manualOverlays }),
-    [demo.overlays, manualOverlays]
+    () => applyStatusOverlays(stations, { ...telemetryOverlays, ...demo.overlays }),
+    [demo.overlays, telemetryOverlays]
   );
 
   const rankedStations = useMemo(
@@ -491,6 +543,14 @@ export default function App() {
     [rankedStations, selectedId]
   );
 
+  const selectedReports = useMemo(
+    () =>
+      communityReports
+        .filter((report) => report.stationId === selectedStation?.id)
+        .slice(0, 5),
+    [communityReports, selectedStation?.id]
+  );
+
   const availableStationCount = rankedStations.filter((station) => station.availableSlots > 0).length;
   const openSlotCount = rankedStations.reduce((total, station) => total + station.availableSlots, 0);
 
@@ -505,23 +565,19 @@ export default function App() {
       return;
     }
 
-    const availableSlots =
-      action === "charging"
-        ? Math.max(0, station.availableSlots - 1)
-        : action === "left"
-          ? Math.min(station.totalSlots, station.availableSlots + 1)
-          : action === "full"
-            ? 0
-            : Math.min(station.totalSlots, Math.max(1, station.availableSlots));
+    const createdAt = new Date().toISOString();
 
-    setManualOverlays((current) => ({
-      ...current,
-      [stationId]: {
-        availableSlots,
-        updatedAt: new Date().toISOString(),
-        reportSource: "crowd report"
-      }
-    }));
+    setCommunityReports((currentReports) => [
+      {
+        id: `${stationId}-${createdAt}`,
+        stationId,
+        stationName: station.name,
+        action,
+        label: reportLabels[action],
+        createdAt
+      },
+      ...currentReports
+    ]);
   };
 
   const voice = useVoiceCommands({
@@ -546,7 +602,7 @@ export default function App() {
           </div>
           <div>
             <h1>EV Slot Mapper</h1>
-            <span>Crowd-reported charger availability</span>
+            <span>Telemetry slots with community reports</span>
           </div>
         </div>
 
@@ -656,6 +712,7 @@ export default function App() {
           qrCode={qrCode}
           shareUrl={shareUrl}
           voice={voice}
+          reports={selectedReports}
           onReport={reportStation}
         />
       </main>

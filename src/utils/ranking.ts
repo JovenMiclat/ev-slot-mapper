@@ -45,7 +45,7 @@ export const rankStations = (stations: Station[], origin: Coordinates): RankedSt
 
 export const applyStatusOverlays = (
   stations: Station[],
-  overlays: Record<string, Partial<Pick<Station, "availableSlots" | "updatedAt" | "reportSource">>>
+  overlays: Record<string, Partial<Pick<Station, "availableSlots" | "updatedAt" | "statusSource">>>
 ) => {
   return stations.map((station) => ({
     ...station,
