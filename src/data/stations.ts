@@ -1,0 +1,87 @@
+import type { Station } from "../types";
+
+export const DEMO_CENTER = {
+  lat: 14.5521,
+  lng: 121.0509
+};
+
+export const stations: Station[] = [
+  {
+    id: "bgc-01",
+    name: "BGC FastCharge",
+    district: "Bonifacio Global City",
+    lat: 14.5521,
+    lng: 121.0509,
+    totalSlots: 6,
+    availableSlots: 3,
+    costPerKwh: 28,
+    connectorTypes: ["CCS2", "Type 2"],
+    updatedAt: "demo seed",
+    reportSource: "demo seed"
+  },
+  {
+    id: "makati-02",
+    name: "Makati Circuit Charge",
+    district: "Makati",
+    lat: 14.5699,
+    lng: 121.0216,
+    totalSlots: 4,
+    availableSlots: 1,
+    costPerKwh: 31,
+    connectorTypes: ["CCS2", "CHAdeMO"],
+    updatedAt: "demo seed",
+    reportSource: "demo seed"
+  },
+  {
+    id: "ortigas-03",
+    name: "Ortigas EV Plaza",
+    district: "Pasig",
+    lat: 14.5869,
+    lng: 121.0614,
+    totalSlots: 5,
+    availableSlots: 0,
+    costPerKwh: 26,
+    connectorTypes: ["Type 2"],
+    updatedAt: "demo seed",
+    reportSource: "demo seed"
+  },
+  {
+    id: "moa-04",
+    name: "MOA Bay Chargers",
+    district: "Pasay",
+    lat: 14.5352,
+    lng: 120.9822,
+    totalSlots: 8,
+    availableSlots: 5,
+    costPerKwh: 34,
+    connectorTypes: ["CCS2", "Type 2", "GB/T"],
+    updatedAt: "demo seed",
+    reportSource: "demo seed"
+  },
+  {
+    id: "qc-05",
+    name: "Quezon Avenue Supercharge",
+    district: "Quezon City",
+    lat: 14.6312,
+    lng: 121.0378,
+    totalSlots: 7,
+    availableSlots: 2,
+    costPerKwh: 29,
+    connectorTypes: ["CCS2", "Tesla"],
+    updatedAt: "demo seed",
+    reportSource: "demo seed"
+  },
+  {
+    id: "alabang-06",
+    name: "Alabang Town EV",
+    district: "Muntinlupa",
+    lat: 14.4241,
+    lng: 121.0319,
+    totalSlots: 4,
+    availableSlots: 2,
+    costPerKwh: 27,
+    connectorTypes: ["CCS2", "Type 2"],
+    updatedAt: "demo seed",
+    reportSource: "demo seed"
+  }
+];

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EV Slot Mapper">
+  <rect width="512" height="512" rx="108" fill="#0f766e"/>
+  <path d="M190 101h116c44 0 80 36 80 80v128c0 38-27 70-63 78l35 41c7 9 1 22-10 22H164c-11 0-17-13-10-22l35-41c-36-8-63-40-63-78V181c0-44 36-80 80-80Z" fill="#f8fafc"/>
+  <path d="M185 193c0-16 13-29 29-29h84c16 0 29 13 29 29v57H185v-57Z" fill="#38bdf8"/>
+  <path d="M244 286h48l-36 74h54l-82 88 22-70h-48l42-92Z" fill="#f59e0b"/>
+  <circle cx="200" cy="322" r="22" fill="#0f172a"/>
+  <circle cx="312" cy="322" r="22" fill="#0f172a"/>
+</svg>
