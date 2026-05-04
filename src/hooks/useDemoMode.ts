@@ -39,21 +39,18 @@ export const useDemoMode = (enabled: boolean) => {
       return {};
     }
 
-    return Object.fromEntries(
-      stations.map((station, index) => {
-        const wave = (tick + index * 2) % (station.totalSlots + 2);
-        const availableSlots = Math.min(station.totalSlots, Math.max(0, station.totalSlots - wave));
+    return stations.reduce<Record<string, StationStatusOverlay>>((statusByStation, station, index) => {
+      const wave = (tick + index * 2) % (station.totalSlots + 2);
+      const availableSlots = Math.min(station.totalSlots, Math.max(0, station.totalSlots - wave));
 
-        return [
-          station.id,
-          {
-            availableSlots,
-            updatedAt: new Date(Date.now() - index * 90000).toISOString(),
-            reportSource: "demo simulation"
-          }
-        ];
-      })
-    );
+      statusByStation[station.id] = {
+        availableSlots,
+        updatedAt: new Date(Date.now() - index * 90000).toISOString(),
+        reportSource: "demo simulation"
+      };
+
+      return statusByStation;
+    }, {});
   }, [enabled, tick]);
 
   return {
