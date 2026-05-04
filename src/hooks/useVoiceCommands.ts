@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { RankedStation } from "../types";
 import { getWazeUrl, openExternalRoute } from "../utils/navigation";
 import { formatDistance } from "../utils/distance";
@@ -28,6 +28,8 @@ const getSpeechRecognition = () => {
   return speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
 };
 
+let activeUtterance: SpeechSynthesisUtterance | null = null;
+
 const speak = (message: string, onStart: () => void, onEnd: () => void) => {
   if (!("speechSynthesis" in window)) {
     onEnd();
@@ -36,10 +38,26 @@ const speak = (message: string, onStart: () => void, onEnd: () => void) => {
 
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(message);
+  activeUtterance = utterance;
+  let finished = false;
+
+  const finish = () => {
+    if (finished || activeUtterance !== utterance) {
+      return;
+    }
+
+    finished = true;
+    activeUtterance = null;
+    onEnd();
+  };
+
   utterance.onstart = onStart;
-  utterance.onend = onEnd;
-  utterance.onerror = onEnd;
+  utterance.onend = finish;
+  utterance.onerror = finish;
   window.speechSynthesis.speak(utterance);
+
+  window.setTimeout(() => window.speechSynthesis.resume(), 250);
+  window.setTimeout(finish, Math.min(9000, Math.max(2500, message.length * 90)));
 };
 
 export const useVoiceCommands = ({
@@ -55,6 +73,8 @@ export const useVoiceCommands = ({
   const [lastResponse, setLastResponse] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState<VoiceMessage[]>([]);
+  const latestTranscriptRef = useRef("");
+  const handledCommandRef = useRef(false);
 
   const supported = useMemo(() => typeof window !== "undefined" && Boolean(getSpeechRecognition()), []);
 
@@ -166,12 +186,30 @@ export const useVoiceCommands = ({
     recognition.onstart = () => {
       setListening(true);
       setTranscript("");
+      latestTranscriptRef.current = "";
+      handledCommandRef.current = false;
       setChatOpen(false);
     };
-    recognition.onend = () => setListening(false);
+    recognition.onend = () => {
+      setListening(false);
+
+      const fallbackTranscript = latestTranscriptRef.current.trim();
+
+      if (!handledCommandRef.current && fallbackTranscript) {
+        handledCommandRef.current = true;
+        handleCommand(fallbackTranscript);
+        return;
+      }
+
+      if (!handledCommandRef.current) {
+        handledCommandRef.current = true;
+        respond("I did not catch that. Try saying find nearest charging station.");
+      }
+    };
     recognition.onerror = () => {
       setListening(false);
-      respond("Voice command failed.");
+      handledCommandRef.current = true;
+      respond("Voice command failed. Check microphone permission and try again.");
     };
     recognition.onresult = (event) => {
       let interimTranscript = "";
@@ -188,9 +226,15 @@ export const useVoiceCommands = ({
         }
       }
 
-      setTranscript(finalTranscript || interimTranscript);
+      const nextTranscript = (finalTranscript || interimTranscript).trim();
+      setTranscript(nextTranscript);
 
-      if (finalTranscript) {
+      if (nextTranscript) {
+        latestTranscriptRef.current = nextTranscript;
+      }
+
+      if (finalTranscript.trim() && !handledCommandRef.current) {
+        handledCommandRef.current = true;
         handleCommand(finalTranscript);
       }
     };
