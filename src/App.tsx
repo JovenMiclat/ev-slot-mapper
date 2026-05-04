@@ -13,6 +13,7 @@ import {
   LocateFixed,
   Map as MapIcon,
   MapPin,
+  MessageCircle,
   Mic,
   Navigation,
   PlugZap,
@@ -20,17 +21,19 @@ import {
   Route,
   Satellite,
   Volume2,
+  X,
   Zap
 } from "lucide-react";
 import { DEMO_CENTER, stations } from "./data/stations";
 import { useDemoMode } from "./hooks/useDemoMode";
+import { useDrivingDistances } from "./hooks/useDrivingDistances";
 import { useStationTelemetry } from "./hooks/useStationTelemetry";
 import { useUserLocation } from "./hooks/useUserLocation";
 import { useVoiceCommands } from "./hooks/useVoiceCommands";
 import type { CommunityReport, Coordinates, RankedStation, ReportAction, Station } from "./types";
 import { isValidCoordinates, withFallbackCoordinates } from "./utils/coordinates";
 import { formatDistance } from "./utils/distance";
-import { formatPeso, formatUpdatedAt } from "./utils/format";
+import { formatClockTime, formatPeso, formatStatusSource, formatUpdatedAt } from "./utils/format";
 import { getGoogleMapsUrl, getWazeUrl } from "./utils/navigation";
 import { applyStatusOverlays, rankStations } from "./utils/ranking";
 
@@ -41,6 +44,25 @@ const reportLabels: Record<ReportAction, string> = {
   left: "I just left",
   full: "Reported full",
   available: "Reported available"
+};
+
+const formatStationDistance = (station: RankedStation) =>
+  `${formatDistance(station.distanceKm)} ${station.distanceMode === "driving" ? "drive" : "direct est."}`;
+
+type VoiceState = {
+  supported: boolean;
+  listening: boolean;
+  speaking: boolean;
+  transcript: string;
+  lastCommand: string;
+  lastResponse: string;
+  chatOpen: boolean;
+  messages: Array<{
+    id: string;
+    role: "driver" | "assistant";
+    text: string;
+  }>;
+  startListening: () => void;
 };
 
 const getInitialDemoMode = () => {
@@ -242,7 +264,7 @@ function StationCard({
         </span>
         <span>
           <Route size={15} />
-          {formatDistance(station.distanceKm)}
+          {formatStationDistance(station)}
         </span>
         <span>
           <Gauge size={15} />
@@ -259,7 +281,7 @@ function StationCard({
       <div className="station-card__footer">
         <span>
           <Clock3 size={14} />
-          {station.statusSource}: {formatUpdatedAt(station.updatedAt)}
+          {formatStatusSource(station.statusSource)} · {formatClockTime(station.updatedAt)}
         </span>
         <div className="nav-actions">
           <a href={wazeUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
@@ -287,21 +309,7 @@ function DetailPane({
   station?: RankedStation;
   qrCode: string;
   shareUrl: string;
-  voice: {
-    supported: boolean;
-    listening: boolean;
-    speaking: boolean;
-    transcript: string;
-    lastCommand: string;
-    lastResponse: string;
-    chatOpen: boolean;
-    messages: Array<{
-      id: string;
-      role: "driver" | "assistant";
-      text: string;
-    }>;
-    startListening: () => void;
-  };
+  voice: VoiceState;
   reports: CommunityReport[];
   onReport: (stationId: string, action: ReportAction) => void;
 }) {
@@ -326,7 +334,7 @@ function DetailPane({
         <h2>{station.name}</h2>
         <p>
           <MapPin size={15} />
-          {station.district} · {formatDistance(station.distanceKm)}
+          {station.district} · {formatStationDistance(station)}
         </p>
       </section>
 
@@ -348,14 +356,14 @@ function DetailPane({
       <section className="occupancy-block" aria-label="Occupancy">
         <div className="occupancy-block__label">
           <span>{occupancy}% occupied</span>
-          <span>{station.statusSource}</span>
+          <span>{formatStatusSource(station.statusSource)}</span>
         </div>
         <div className="occupancy-track">
           <span style={{ width: `${occupancy}%` }} />
         </div>
         <p>
           <Clock3 size={14} />
-          Updated {formatUpdatedAt(station.updatedAt)}
+          Updated {formatClockTime(station.updatedAt)}
         </p>
       </section>
 
@@ -452,6 +460,80 @@ function DetailPane({
   );
 }
 
+function VoiceDock({ voice }: { voice: VoiceState }) {
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (voice.listening || voice.speaking || voice.chatOpen || voice.transcript) {
+      setExpanded(true);
+    }
+  }, [voice.chatOpen, voice.listening, voice.speaking, voice.transcript]);
+
+  const openAndListen = () => {
+    setExpanded(true);
+
+    if (voice.supported) {
+      voice.startListening();
+    }
+  };
+
+  if (!expanded) {
+    return (
+      <section className="voice-dock" aria-label="Voice assistant">
+        <button type="button" className="voice-dock__launcher" onClick={openAndListen}>
+          <Mic size={19} />
+          <span>Voice</span>
+          {voice.lastResponse && <small>{voice.lastResponse}</small>}
+        </button>
+      </section>
+    );
+  }
+
+  return (
+    <section className="voice-dock voice-dock--expanded" aria-label="Voice assistant">
+      <div className="voice-dock__panel">
+        <div className="voice-dock__header">
+          <span>
+            <MessageCircle size={17} />
+            Voice
+          </span>
+          <button type="button" onClick={() => setExpanded(false)} aria-label="Close voice chat">
+            <X size={18} />
+          </button>
+        </div>
+
+        <button type="button" className="voice-dock__listen" onClick={voice.startListening} disabled={!voice.supported}>
+          <Mic size={18} />
+          {voice.listening ? "Listening" : voice.supported ? "Start voice" : "Unsupported"}
+        </button>
+
+        {(voice.listening || voice.transcript) && (
+          <p className="live-transcript">
+            <span>{voice.listening ? "Listening" : "Heard"}</span>
+            {voice.transcript || "..."}
+          </p>
+        )}
+
+        {(voice.speaking || voice.lastResponse) && (
+          <p className="voice-result">
+            {voice.lastResponse && <span>{voice.speaking ? "Speaking: " : ""}{voice.lastResponse}</span>}
+          </p>
+        )}
+
+        {voice.chatOpen && voice.messages.length > 0 && (
+          <div className="voice-chat" aria-label="Voice chat transcript">
+            {voice.messages.slice(-5).map((message) => (
+              <div key={message.id} className={`voice-chat__bubble voice-chat__bubble--${message.role}`}>
+                {message.text}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export default function App() {
   const [demoMode, setDemoMode] = useState(getInitialDemoMode);
   const [view, setView] = useState<ViewMode>("list");
@@ -527,10 +609,11 @@ export default function App() {
     () => applyStatusOverlays(stations, { ...telemetryOverlays, ...demo.overlays }),
     [demo.overlays, telemetryOverlays]
   );
+  const drivingDistances = useDrivingDistances(safeUserCoords, stations);
 
   const rankedStations = useMemo(
-    () => rankStations(effectiveStations, safeUserCoords),
-    [effectiveStations, safeUserCoords]
+    () => rankStations(effectiveStations, safeUserCoords, drivingDistances),
+    [drivingDistances, effectiveStations, safeUserCoords]
   );
 
   const visibleStations = useMemo(
@@ -716,6 +799,7 @@ export default function App() {
           onReport={reportStation}
         />
       </main>
+      <VoiceDock voice={voice} />
     </div>
   );
 }

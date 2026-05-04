@@ -7,7 +7,7 @@ const fallbackLocation: LocationState = {
   coords: DEMO_CENTER,
   status: "fallback",
   source: "fallback",
-  message: "Demo location"
+  message: "Fallback location"
 };
 
 export const useUserLocation = (demoMode: boolean, demoCoords = DEMO_CENTER): LocationState => {
@@ -57,7 +57,7 @@ export const useUserLocation = (demoMode: boolean, demoCoords = DEMO_CENTER): Lo
         if (!isValidCoordinates(nextCoords)) {
           setLocation({
             ...fallbackLocation,
-            message: "Demo location"
+            message: "Fallback location"
           });
           return;
         }
@@ -73,7 +73,7 @@ export const useUserLocation = (demoMode: boolean, demoCoords = DEMO_CENTER): Lo
         setLocation({
           ...fallbackLocation,
           status: "blocked",
-          message: "Demo location"
+          message: "Fallback location"
         });
       },
       {

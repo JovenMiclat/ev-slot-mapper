@@ -1,3 +1,5 @@
+import type { StationStatusSource } from "../types";
+
 export const formatUpdatedAt = (updatedAt: string) => {
   const timestamp = Date.parse(updatedAt);
 
@@ -22,3 +24,28 @@ export const formatUpdatedAt = (updatedAt: string) => {
 };
 
 export const formatPeso = (amount: number) => `PHP ${amount.toFixed(0)}/kWh`;
+
+export const formatStatusSource = (source: StationStatusSource) => {
+  if (source === "station telemetry") {
+    return "Live station feed";
+  }
+
+  if (source === "demo telemetry") {
+    return "Demo live feed";
+  }
+
+  return "Seed status";
+};
+
+export const formatClockTime = (updatedAt: string) => {
+  const timestamp = Date.parse(updatedAt);
+
+  if (Number.isNaN(timestamp)) {
+    return updatedAt;
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(timestamp);
+};

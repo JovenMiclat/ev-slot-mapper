@@ -12,7 +12,7 @@ npm run dev
 Open:
 
 - `http://localhost:5173/?demo=1` for simulated movement and station changes
-- `http://localhost:5173/` for device geolocation with a demo fallback
+- `http://localhost:5173/` for device geolocation with a fallback location
 
 ## Build
 
@@ -32,4 +32,4 @@ The production output is generated in `dist/`.
 6. Scan the in-app Demo QR from another phone.
 7. Optional: tap voice mode and say "find nearest charging station" or "show available chargers".
 
-Availability comes from the automatic station status feed in this demo. Community reports are logged as observations and do not directly overwrite station slot counts.
+Availability comes from the automatic station status feed in this demo. Community reports are logged as observations and do not directly overwrite station slot counts. Distances use driving routes when the routing service is available, with direct-distance estimates as fallback.

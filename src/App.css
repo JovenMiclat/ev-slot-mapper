@@ -206,7 +206,7 @@ a {
   display: grid;
   grid-template-columns: 1fr;
   gap: 14px;
-  padding: 0 16px 16px;
+  padding: 0 16px 104px;
 }
 
 .workspace[data-view="list"] .map-pane {
@@ -752,6 +752,101 @@ a {
   border: 1px solid var(--line);
 }
 
+.voice-dock {
+  position: fixed;
+  left: 14px;
+  right: 14px;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  z-index: 1200;
+  display: grid;
+  pointer-events: none;
+}
+
+.voice-dock__launcher,
+.voice-dock__panel {
+  pointer-events: auto;
+  box-shadow: 0 18px 45px rgba(24, 33, 47, 0.22);
+}
+
+.voice-dock__launcher {
+  min-height: 58px;
+  width: 100%;
+  border: 1px solid rgba(15, 118, 110, 0.42);
+  border-radius: 8px;
+  background: var(--teal);
+  color: #ffffff;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  justify-content: start;
+  gap: 9px;
+  padding: 10px 14px;
+  text-align: left;
+}
+
+.voice-dock__launcher span {
+  font-weight: 900;
+}
+
+.voice-dock__launcher small {
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-dock__panel {
+  max-height: min(52vh, 430px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.98);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.voice-dock__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.voice-dock__header span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.voice-dock__header button {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+}
+
+.voice-dock__listen {
+  min-height: 44px;
+  border: 1px solid var(--teal);
+  border-radius: 8px;
+  background: var(--teal);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 900;
+}
+
 .qr-panel img {
   width: 176px;
   max-width: 100%;
@@ -797,6 +892,10 @@ a {
 }
 
 @media (min-width: 980px) {
+  .voice-dock {
+    display: none;
+  }
+
   .mobile-view-switch {
     display: none;
   }
@@ -808,6 +907,7 @@ a {
     align-items: stretch;
     min-height: calc(100vh - 96px);
     padding-inline: clamp(18px, 2.4vw, 30px);
+    padding-bottom: 16px;
   }
 
   .workspace[data-view="list"] .map-pane,

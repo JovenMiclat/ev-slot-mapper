@@ -137,10 +137,11 @@ export const useVoiceCommands = ({
 
       if (normalized.includes("find nearest") || normalized.includes("nearest charging")) {
         onSelectStation(nearestAvailable);
+        const distanceType = nearestAvailable.distanceMode === "driving" ? "driving distance" : "estimated direct distance";
         respond(
           `Nearest available station is ${nearestAvailable.name}, ${formatDistance(
             nearestAvailable.distanceKm
-          )} away, ${nearestAvailable.availableSlots} slots open.`
+          )} ${distanceType}, ${nearestAvailable.availableSlots} slots open.`
         );
         return;
       }

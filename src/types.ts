@@ -1,6 +1,7 @@
 export type ConnectorType = "CCS2" | "Type 2" | "CHAdeMO" | "Tesla" | "GB/T";
 export type StationStatusSource = "seed data" | "station telemetry" | "demo telemetry";
 export type ReportAction = "charging" | "left" | "full" | "available";
+export type DistanceMode = "driving" | "direct";
 
 export type Coordinates = {
   lat: number;
@@ -37,6 +38,7 @@ export type CommunityReport = {
 
 export type RankedStation = Station & {
   distanceKm: number;
+  distanceMode: DistanceMode;
   score: number;
   rankLabel: string;
 };

@@ -1,6 +1,8 @@
 import type { Coordinates, RankedStation, Station } from "../types";
 import { distanceInKm } from "./distance";
 
+export type DrivingDistanceMap = Record<string, number>;
+
 const getFreshnessPenalty = (updatedAt: string) => {
   const timestamp = Date.parse(updatedAt);
 
@@ -12,10 +14,16 @@ const getFreshnessPenalty = (updatedAt: string) => {
   return Math.min(2.5, ageMinutes / 90);
 };
 
-export const rankStations = (stations: Station[], origin: Coordinates): RankedStation[] => {
+export const rankStations = (
+  stations: Station[],
+  origin: Coordinates,
+  drivingDistances: DrivingDistanceMap = {}
+): RankedStation[] => {
   return stations
     .map((station) => {
-      const distanceKm = distanceInKm(origin, station);
+      const drivingDistanceKm = drivingDistances[station.id];
+      const hasDrivingDistance = Number.isFinite(drivingDistanceKm);
+      const distanceKm = hasDrivingDistance ? drivingDistanceKm : distanceInKm(origin, station);
       const unavailablePenalty = station.availableSlots > 0 ? 0 : 1000;
       const costPenalty = station.costPerKwh * 0.035;
       const slotBonus = station.availableSlots * 0.8;
@@ -25,6 +33,7 @@ export const rankStations = (stations: Station[], origin: Coordinates): RankedSt
       return {
         ...station,
         distanceKm,
+        distanceMode: hasDrivingDistance ? ("driving" as const) : ("direct" as const),
         score,
         rankLabel: station.availableSlots > 0 ? "Best available" : "Currently full"
       };
