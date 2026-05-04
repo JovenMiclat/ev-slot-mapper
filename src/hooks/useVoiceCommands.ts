@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { RankedStation } from "../types";
 import { getWazeUrl, openExternalRoute } from "../utils/navigation";
 import { formatDistance } from "../utils/distance";
+import { formatDuration } from "../utils/format";
 
 type SpeechRecognitionConstructor = new () => SpeechRecognition;
 
@@ -138,8 +139,12 @@ export const useVoiceCommands = ({
       if (normalized.includes("find nearest") || normalized.includes("nearest charging")) {
         onSelectStation(nearestAvailable);
         const distanceType = nearestAvailable.distanceMode === "driving" ? "driving distance" : "estimated direct distance";
+        const eta =
+          nearestAvailable.distanceMode === "driving" && nearestAvailable.durationMinutes
+            ? `${formatDuration(nearestAvailable.durationMinutes)}, `
+            : "";
         respond(
-          `Nearest available station is ${nearestAvailable.name}, ${formatDistance(
+          `Nearest available station is ${nearestAvailable.name}, ${eta}${formatDistance(
             nearestAvailable.distanceKm
           )} ${distanceType}, ${nearestAvailable.availableSlots} slots open.`
         );
@@ -252,6 +257,7 @@ export const useVoiceCommands = ({
     lastResponse,
     chatOpen,
     messages,
+    runCommand: handleCommand,
     startListening
   };
 };

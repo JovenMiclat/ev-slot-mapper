@@ -30,14 +30,29 @@ import { useDrivingDistances } from "./hooks/useDrivingDistances";
 import { useStationTelemetry } from "./hooks/useStationTelemetry";
 import { useUserLocation } from "./hooks/useUserLocation";
 import { useVoiceCommands } from "./hooks/useVoiceCommands";
-import type { CommunityReport, Coordinates, RankedStation, ReportAction, Station } from "./types";
+import type {
+  CommunityReport,
+  ConnectorType,
+  Coordinates,
+  RankedStation,
+  ReportAction,
+  Station,
+  StationStatusOverlay
+} from "./types";
 import { isValidCoordinates, withFallbackCoordinates } from "./utils/coordinates";
-import { formatDistance } from "./utils/distance";
-import { formatClockTime, formatPeso, formatStatusSource, formatUpdatedAt } from "./utils/format";
+import { distanceInKm, formatDistance } from "./utils/distance";
+import {
+  formatDuration,
+  formatPeso,
+  formatStatusSource,
+  formatStatusTimestamp,
+  formatUpdatedAt
+} from "./utils/format";
 import { getGoogleMapsUrl, getWazeUrl } from "./utils/navigation";
 import { applyStatusOverlays, rankStations } from "./utils/ranking";
 
 type ViewMode = "list" | "map";
+type DemoScenario = "normal" | "allFull" | "nearestOpen" | "outage";
 
 const reportLabels: Record<ReportAction, string> = {
   charging: "I'm charging",
@@ -46,8 +61,24 @@ const reportLabels: Record<ReportAction, string> = {
   available: "Reported available"
 };
 
+const PUBLIC_DEMO_URL = "https://ev-slot-mapper.vercel.app/?demo=1";
+const connectorOptions = Array.from(new Set(stations.flatMap((station) => station.connectorTypes)));
+const reportStaleAfterMinutes = 30;
+
 const formatStationDistance = (station: RankedStation) =>
-  `${formatDistance(station.distanceKm)} ${station.distanceMode === "driving" ? "drive" : "direct est."}`;
+  station.distanceMode === "driving"
+    ? `${formatDuration(station.durationMinutes)} · ${formatDistance(station.distanceKm)} drive`
+    : `${formatDistance(station.distanceKm)} direct est.`;
+
+const isReportStale = (createdAt: string) => {
+  const timestamp = Date.parse(createdAt);
+
+  if (Number.isNaN(timestamp)) {
+    return false;
+  }
+
+  return Date.now() - timestamp > reportStaleAfterMinutes * 60000;
+};
 
 type VoiceState = {
   supported: boolean;
@@ -63,6 +94,7 @@ type VoiceState = {
     text: string;
   }>;
   startListening: () => void;
+  runCommand: (command: string) => void;
 };
 
 const getInitialDemoMode = () => {
@@ -222,10 +254,12 @@ function AvailabilityBadge({ station }: { station: Station }) {
 
 function StationCard({
   station,
+  highlights,
   selected,
   onSelect
 }: {
   station: RankedStation;
+  highlights: string[];
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -273,15 +307,25 @@ function StationCard({
       </div>
 
       <div className="connector-row" aria-label="Connector types">
+        <span>{station.maxKw} kW</span>
         {station.connectorTypes.map((connector) => (
           <span key={connector}>{connector}</span>
+        ))}
+      </div>
+
+      <div className="station-signals" aria-label="Station quality signals">
+        <span className={`confidence-pill confidence-pill--${station.confidenceLabel.split(" ")[0].toLowerCase()}`}>
+          {station.confidenceLabel}
+        </span>
+        {highlights.map((highlight) => (
+          <span key={highlight}>{highlight}</span>
         ))}
       </div>
 
       <div className="station-card__footer">
         <span>
           <Clock3 size={14} />
-          {formatStatusSource(station.statusSource)} · {formatClockTime(station.updatedAt)}
+          {formatStatusSource(station.statusSource)} · {formatStatusTimestamp(station.updatedAt)}
         </span>
         <div className="nav-actions">
           <a href={wazeUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
@@ -300,6 +344,7 @@ function StationCard({
 
 function DetailPane({
   station,
+  highlights,
   qrCode,
   shareUrl,
   voice,
@@ -307,6 +352,7 @@ function DetailPane({
   onReport
 }: {
   station?: RankedStation;
+  highlights: string[];
   qrCode: string;
   shareUrl: string;
   voice: VoiceState;
@@ -351,6 +397,19 @@ function DetailPane({
           <strong>{formatPeso(station.costPerKwh).replace("/kWh", "")}</strong>
           <span>per kWh</span>
         </div>
+        <div>
+          <strong>{station.maxKw}</strong>
+          <span>max kW</span>
+        </div>
+      </section>
+
+      <section className="station-signals station-signals--detail" aria-label="Station confidence and highlights">
+        <span className={`confidence-pill confidence-pill--${station.confidenceLabel.split(" ")[0].toLowerCase()}`}>
+          {station.confidenceLabel}
+        </span>
+        {highlights.map((highlight) => (
+          <span key={highlight}>{highlight}</span>
+        ))}
       </section>
 
       <section className="occupancy-block" aria-label="Occupancy">
@@ -363,7 +422,7 @@ function DetailPane({
         </div>
         <p>
           <Clock3 size={14} />
-          Updated {formatClockTime(station.updatedAt)}
+          Updated {formatStatusTimestamp(station.updatedAt)}
         </p>
       </section>
 
@@ -405,7 +464,10 @@ function DetailPane({
         {reports.length > 0 ? (
           <div className="report-log__items">
             {reports.map((report) => (
-              <div key={report.id} className="report-log__item">
+              <div
+                key={report.id}
+                className={`report-log__item${isReportStale(report.createdAt) ? " report-log__item--stale" : ""}`}
+              >
                 <span>{report.label}</span>
                 <time>{formatUpdatedAt(report.createdAt)}</time>
               </div>
@@ -425,6 +487,17 @@ function DetailPane({
           <Mic size={18} />
           {voice.listening ? "Listening" : voice.supported ? "Start voice" : "Unsupported"}
         </button>
+        <div className="voice-command-chips" aria-label="Voice command shortcuts">
+          <button type="button" onClick={() => voice.runCommand("find nearest charging station")}>
+            Find nearest
+          </button>
+          <button type="button" onClick={() => voice.runCommand("show available chargers")}>
+            Show available
+          </button>
+          <button type="button" onClick={() => voice.runCommand("open waze")}>
+            Open Waze
+          </button>
+        </div>
         {(voice.listening || voice.transcript) && (
           <p className="live-transcript">
             <span>{voice.listening ? "Listening" : "Heard"}</span>
@@ -507,6 +580,18 @@ function VoiceDock({ voice }: { voice: VoiceState }) {
           {voice.listening ? "Listening" : voice.supported ? "Start voice" : "Unsupported"}
         </button>
 
+        <div className="voice-command-chips" aria-label="Voice command shortcuts">
+          <button type="button" onClick={() => voice.runCommand("find nearest charging station")}>
+            Find nearest
+          </button>
+          <button type="button" onClick={() => voice.runCommand("show available chargers")}>
+            Show available
+          </button>
+          <button type="button" onClick={() => voice.runCommand("open waze")}>
+            Open Waze
+          </button>
+        </div>
+
         {(voice.listening || voice.transcript) && (
           <p className="live-transcript">
             <span>{voice.listening ? "Listening" : "Heard"}</span>
@@ -534,6 +619,32 @@ function VoiceDock({ voice }: { voice: VoiceState }) {
   );
 }
 
+function MobileStationBar({ station, onShowMap }: { station?: RankedStation; onShowMap: () => void }) {
+  if (!station) {
+    return null;
+  }
+
+  return (
+    <section className="selected-station-bar" aria-label="Selected station actions">
+      <div>
+        <strong>{station.name}</strong>
+        <span>
+          {station.availableSlots} open · {formatStationDistance(station)}
+        </span>
+      </div>
+      <button type="button" onClick={onShowMap} aria-label="Show station on map">
+        <MapIcon size={18} />
+      </button>
+      <a href={getWazeUrl(station)} target="_blank" rel="noreferrer" aria-label="Open Waze">
+        <Navigation size={18} />
+      </a>
+      <a href={getGoogleMapsUrl(station)} target="_blank" rel="noreferrer" aria-label="Open Google Maps">
+        <ExternalLink size={18} />
+      </a>
+    </section>
+  );
+}
+
 export default function App() {
   const [demoMode, setDemoMode] = useState(getInitialDemoMode);
   const [view, setView] = useState<ViewMode>("list");
@@ -541,13 +652,15 @@ export default function App() {
     typeof window === "undefined" ? true : window.matchMedia("(min-width: 980px)").matches
   );
   const [availableOnly, setAvailableOnly] = useState(false);
+  const [selectedConnectors, setSelectedConnectors] = useState<ConnectorType[]>([]);
+  const [demoScenario, setDemoScenario] = useState<DemoScenario>("normal");
   const [selectedId, setSelectedId] = useState(stations[0]?.id ?? "");
   const [communityReports, setCommunityReports] = useState<CommunityReport[]>([]);
   const [qrCode, setQrCode] = useState("");
   const [shareUrl, setShareUrl] = useState("");
 
   const demo = useDemoMode(demoMode);
-  const telemetryOverlays = useStationTelemetry(stations);
+  const telemetryOverlays = useStationTelemetry(stations, !(demoMode && demoScenario === "outage"));
   const location = useUserLocation(demoMode, demo.coords);
   const safeUserCoords = useMemo(
     () => withFallbackCoordinates(location.coords, DEMO_CENTER),
@@ -589,13 +702,9 @@ export default function App() {
   }, [demoMode]);
 
   useEffect(() => {
-    const url = new URL(window.location.href);
-    url.searchParams.set("demo", "1");
-    url.hash = "";
-    const nextShareUrl = url.toString();
-    setShareUrl(nextShareUrl);
+    setShareUrl(PUBLIC_DEMO_URL);
 
-    QRCode.toDataURL(nextShareUrl, {
+    QRCode.toDataURL(PUBLIC_DEMO_URL, {
       width: 176,
       margin: 1,
       color: {
@@ -603,22 +712,73 @@ export default function App() {
         light: "#ffffff"
       }
     }).then(setQrCode);
-  }, [demoMode]);
+  }, []);
+
+  const demoScenarioOverlays = useMemo<Record<string, StationStatusOverlay>>(() => {
+    if (!demoMode || demoScenario === "normal") {
+      return {};
+    }
+
+    const updatedAt =
+      demoScenario === "outage" ? new Date(Date.now() - 42 * 60000).toISOString() : new Date().toISOString();
+
+    if (demoScenario === "allFull") {
+      return stations.reduce<Record<string, StationStatusOverlay>>((overlays, station) => {
+        overlays[station.id] = {
+          availableSlots: 0,
+          updatedAt,
+          statusSource: "demo telemetry"
+        };
+        return overlays;
+      }, {});
+    }
+
+    if (demoScenario === "outage") {
+      return stations.reduce<Record<string, StationStatusOverlay>>((overlays, station) => {
+        overlays[station.id] = {
+          availableSlots: station.availableSlots,
+          updatedAt,
+          statusSource: "telemetry offline"
+        };
+        return overlays;
+      }, {});
+    }
+
+    const nearestStation = stations.reduce((nearest, station) =>
+      distanceInKm(safeUserCoords, station) < distanceInKm(safeUserCoords, nearest) ? station : nearest
+    );
+
+    return {
+      [nearestStation.id]: {
+        availableSlots: Math.min(nearestStation.totalSlots, Math.max(2, nearestStation.availableSlots)),
+        updatedAt,
+        statusSource: "demo telemetry"
+      }
+    };
+  }, [demoMode, demoScenario, safeUserCoords]);
 
   const effectiveStations = useMemo(
-    () => applyStatusOverlays(stations, { ...telemetryOverlays, ...demo.overlays }),
-    [demo.overlays, telemetryOverlays]
+    () => applyStatusOverlays(stations, { ...telemetryOverlays, ...demo.overlays, ...demoScenarioOverlays }),
+    [demo.overlays, demoScenarioOverlays, telemetryOverlays]
   );
-  const drivingDistances = useDrivingDistances(safeUserCoords, stations);
+  const routing = useDrivingDistances(safeUserCoords, stations);
 
   const rankedStations = useMemo(
-    () => rankStations(effectiveStations, safeUserCoords, drivingDistances),
-    [drivingDistances, effectiveStations, safeUserCoords]
+    () => rankStations(effectiveStations, safeUserCoords, routing.metrics),
+    [effectiveStations, routing.metrics, safeUserCoords]
   );
 
   const visibleStations = useMemo(
-    () => (availableOnly ? rankedStations.filter((station) => station.availableSlots > 0) : rankedStations),
-    [availableOnly, rankedStations]
+    () =>
+      rankedStations.filter((station) => {
+        const passesAvailability = !availableOnly || station.availableSlots > 0;
+        const passesConnector =
+          selectedConnectors.length === 0 ||
+          selectedConnectors.some((connector) => station.connectorTypes.includes(connector));
+
+        return passesAvailability && passesConnector;
+      }),
+    [availableOnly, rankedStations, selectedConnectors]
   );
 
   const selectedStation = useMemo(
@@ -636,6 +796,38 @@ export default function App() {
 
   const availableStationCount = rankedStations.filter((station) => station.availableSlots > 0).length;
   const openSlotCount = rankedStations.reduce((total, station) => total + station.availableSlots, 0);
+  const stationHighlights = useMemo(() => {
+    const availableStations = rankedStations.filter((station) => station.availableSlots > 0);
+    const cheapest = availableStations.reduce<RankedStation | undefined>(
+      (best, station) => (!best || station.costPerKwh < best.costPerKwh ? station : best),
+      undefined
+    );
+    const fastest = availableStations.reduce<RankedStation | undefined>(
+      (best, station) => (!best || station.maxKw > best.maxKw ? station : best),
+      undefined
+    );
+    const mostSlots = availableStations.reduce<RankedStation | undefined>(
+      (best, station) => (!best || station.availableSlots > best.availableSlots ? station : best),
+      undefined
+    );
+
+    return rankedStations.reduce<Record<string, string[]>>((highlights, station) => {
+      highlights[station.id] = [
+        cheapest?.id === station.id ? "Cheapest nearby" : "",
+        fastest?.id === station.id ? "Fastest charger" : "",
+        mostSlots?.id === station.id ? "Most slots open" : ""
+      ].filter(Boolean);
+      return highlights;
+    }, {});
+  }, [rankedStations]);
+
+  const toggleConnector = (connector: ConnectorType) => {
+    setSelectedConnectors((currentConnectors) =>
+      currentConnectors.includes(connector)
+        ? currentConnectors.filter((currentConnector) => currentConnector !== connector)
+        : [...currentConnectors, connector]
+    );
+  };
 
   const selectStation = (station: RankedStation) => {
     setSelectedId(station.id);
@@ -727,6 +919,14 @@ export default function App() {
               {safeUserCoords.accuracy && <span>+/- {Math.round(safeUserCoords.accuracy)} m</span>}
             </div>
 
+            <div className={`routing-strip routing-strip--${routing.status}`}>
+              <Route size={15} />
+              {routing.status === "loading" && <span>Loading driving ETA</span>}
+              {routing.status === "ready" && <span>Driving ETA enabled</span>}
+              {routing.status === "fallback" && <span>Direct estimates shown</span>}
+              {routing.status === "idle" && <span>Route estimates waiting for location</span>}
+            </div>
+
             <div className="summary-strip">
               <div>
                 <strong>{availableStationCount}</strong>
@@ -766,11 +966,69 @@ export default function App() {
               </button>
             </div>
 
+            <div className="connector-filter" aria-label="Connector filters">
+              {connectorOptions.map((connector) => (
+                <button
+                  key={connector}
+                  type="button"
+                  className={selectedConnectors.includes(connector) ? "active" : ""}
+                  onClick={() => toggleConnector(connector)}
+                >
+                  {connector}
+                </button>
+              ))}
+            </div>
+
+            {demoMode && (
+              <section className="demo-panel" aria-label="Demo controls">
+                <div className="panel-title">
+                  <Satellite size={16} />
+                  <span>Demo controls</span>
+                </div>
+                <div className="demo-panel__actions">
+                  <button
+                    type="button"
+                    className={demoScenario === "normal" ? "active" : ""}
+                    onClick={() => {
+                      setDemoScenario("normal");
+                      setCommunityReports([]);
+                      setSelectedConnectors([]);
+                      setAvailableOnly(false);
+                    }}
+                  >
+                    Reset
+                  </button>
+                  <button
+                    type="button"
+                    className={demoScenario === "allFull" ? "active" : ""}
+                    onClick={() => setDemoScenario("allFull")}
+                  >
+                    All full
+                  </button>
+                  <button
+                    type="button"
+                    className={demoScenario === "nearestOpen" ? "active" : ""}
+                    onClick={() => setDemoScenario("nearestOpen")}
+                  >
+                    Nearest open
+                  </button>
+                  <button
+                    type="button"
+                    className={demoScenario === "outage" ? "active" : ""}
+                    onClick={() => setDemoScenario("outage")}
+                  >
+                    Outage
+                  </button>
+                </div>
+              </section>
+            )}
+
             <div className="station-feed">
               {visibleStations.map((station) => (
                 <StationCard
                   key={station.id}
                   station={station}
+                  highlights={stationHighlights[station.id] ?? []}
                   selected={selectedStation?.id === station.id}
                   onSelect={() => selectStation(station)}
                 />
@@ -792,6 +1050,7 @@ export default function App() {
 
         <DetailPane
           station={selectedStation}
+          highlights={selectedStation ? (stationHighlights[selectedStation.id] ?? []) : []}
           qrCode={qrCode}
           shareUrl={shareUrl}
           voice={voice}
@@ -799,6 +1058,7 @@ export default function App() {
           onReport={reportStation}
         />
       </main>
+      <MobileStationBar station={selectedStation} onShowMap={() => setView("map")} />
       <VoiceDock voice={voice} />
     </div>
   );

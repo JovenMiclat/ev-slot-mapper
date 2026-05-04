@@ -15,6 +15,7 @@ export const stations: Station[] = [
     totalSlots: 6,
     availableSlots: 3,
     costPerKwh: 28,
+    maxKw: 120,
     connectorTypes: ["CCS2", "Type 2"],
     updatedAt: "demo seed",
     statusSource: "seed data"
@@ -28,6 +29,7 @@ export const stations: Station[] = [
     totalSlots: 4,
     availableSlots: 1,
     costPerKwh: 31,
+    maxKw: 90,
     connectorTypes: ["CCS2", "CHAdeMO"],
     updatedAt: "demo seed",
     statusSource: "seed data"
@@ -41,6 +43,7 @@ export const stations: Station[] = [
     totalSlots: 5,
     availableSlots: 0,
     costPerKwh: 26,
+    maxKw: 22,
     connectorTypes: ["Type 2"],
     updatedAt: "demo seed",
     statusSource: "seed data"
@@ -54,6 +57,7 @@ export const stations: Station[] = [
     totalSlots: 8,
     availableSlots: 5,
     costPerKwh: 34,
+    maxKw: 150,
     connectorTypes: ["CCS2", "Type 2", "GB/T"],
     updatedAt: "demo seed",
     statusSource: "seed data"
@@ -67,6 +71,7 @@ export const stations: Station[] = [
     totalSlots: 7,
     availableSlots: 2,
     costPerKwh: 29,
+    maxKw: 180,
     connectorTypes: ["CCS2", "Tesla"],
     updatedAt: "demo seed",
     statusSource: "seed data"
@@ -80,6 +85,7 @@ export const stations: Station[] = [
     totalSlots: 4,
     availableSlots: 2,
     costPerKwh: 27,
+    maxKw: 50,
     connectorTypes: ["CCS2", "Type 2"],
     updatedAt: "demo seed",
     statusSource: "seed data"
