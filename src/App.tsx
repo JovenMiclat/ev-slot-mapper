@@ -22,11 +22,12 @@ import {
   Volume2,
   Zap
 } from "lucide-react";
-import { stations } from "./data/stations";
+import { DEMO_CENTER, stations } from "./data/stations";
 import { useDemoMode } from "./hooks/useDemoMode";
 import { useUserLocation } from "./hooks/useUserLocation";
 import { useVoiceCommands } from "./hooks/useVoiceCommands";
 import type { Coordinates, RankedStation, Station, StationStatusOverlay } from "./types";
+import { isValidCoordinates, withFallbackCoordinates } from "./utils/coordinates";
 import { formatDistance } from "./utils/distance";
 import { formatPeso, formatUpdatedAt } from "./utils/format";
 import { getGoogleMapsUrl, getWazeUrl } from "./utils/navigation";
@@ -62,7 +63,12 @@ const userIcon = L.divIcon({
 });
 
 const focusMapOn = (map: L.Map, station: RankedStation | undefined, coords: Coordinates) => {
-  const focus = station ?? coords;
+  const focus = station && isValidCoordinates(station) ? station : coords;
+
+  if (!isValidCoordinates(focus)) {
+    return;
+  }
+
   map.flyTo([focus.lat, focus.lng], station ? 14 : 13, {
     animate: true,
     duration: 0.65
@@ -96,10 +102,13 @@ function StationMap({
   userCoords: Coordinates;
   onSelectStation: (station: RankedStation) => void;
 }) {
+  const safeUserCoords = withFallbackCoordinates(userCoords, DEMO_CENTER);
+  const markerStations = stations.filter(isValidCoordinates);
+
   return (
     <MapContainer
       className="station-map"
-      center={[userCoords.lat, userCoords.lng]}
+      center={[safeUserCoords.lat, safeUserCoords.lng]}
       zoom={13}
       scrollWheelZoom
       zoomControl={false}
@@ -108,10 +117,10 @@ function StationMap({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      <Marker position={[userCoords.lat, userCoords.lng]} icon={userIcon}>
+      <Marker position={[safeUserCoords.lat, safeUserCoords.lng]} icon={userIcon}>
         <Popup>Your location</Popup>
       </Marker>
-      {stations.map((station) => (
+      {markerStations.map((station) => (
         <Marker
           key={station.id}
           position={[station.lat, station.lng]}
@@ -127,7 +136,7 @@ function StationMap({
           </Popup>
         </Marker>
       ))}
-      <MapFocus selectedStation={selectedStation} coords={userCoords} />
+      <MapFocus selectedStation={selectedStation} coords={safeUserCoords} />
     </MapContainer>
   );
 }
@@ -392,6 +401,10 @@ export default function App() {
 
   const demo = useDemoMode(demoMode);
   const location = useUserLocation(demoMode, demo.coords);
+  const safeUserCoords = useMemo(
+    () => withFallbackCoordinates(location.coords, DEMO_CENTER),
+    [location.coords]
+  );
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -428,8 +441,8 @@ export default function App() {
   );
 
   const rankedStations = useMemo(
-    () => rankStations(effectiveStations, location.coords),
-    [effectiveStations, location.coords]
+    () => rankStations(effectiveStations, safeUserCoords),
+    [effectiveStations, safeUserCoords]
   );
 
   const visibleStations = useMemo(
@@ -535,7 +548,7 @@ export default function App() {
               <LocateFixed size={16} />
               {location.message}
             </span>
-            {location.coords.accuracy && <span>+/- {Math.round(location.coords.accuracy)} m</span>}
+            {safeUserCoords.accuracy && <span>+/- {Math.round(safeUserCoords.accuracy)} m</span>}
           </div>
 
           <div className="summary-strip">
@@ -593,7 +606,7 @@ export default function App() {
           <StationMap
             stations={visibleStations}
             selectedStation={selectedStation}
-            userCoords={location.coords}
+            userCoords={safeUserCoords}
             onSelectStation={selectStation}
           />
         </section>

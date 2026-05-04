@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { DEMO_CENTER } from "../data/stations";
 import type { LocationState } from "../types";
+import { isValidCoordinates, withFallbackCoordinates } from "../utils/coordinates";
 
 const fallbackLocation: LocationState = {
   coords: DEMO_CENTER,
@@ -28,7 +29,7 @@ export const useUserLocation = (demoMode: boolean, demoCoords = DEMO_CENTER): Lo
   useEffect(() => {
     if (demoMode) {
       setLocation({
-        coords: demoCoords,
+        coords: withFallbackCoordinates(demoCoords, DEMO_CENTER),
         status: "active",
         source: "demo",
         message: "Demo drive"
@@ -47,12 +48,22 @@ export const useUserLocation = (demoMode: boolean, demoCoords = DEMO_CENTER): Lo
 
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
+        const nextCoords = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy
+        };
+
+        if (!isValidCoordinates(nextCoords)) {
+          setLocation({
+            ...fallbackLocation,
+            message: "Demo location"
+          });
+          return;
+        }
+
         setLocation({
-          coords: {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            accuracy: position.coords.accuracy
-          },
+          coords: withFallbackCoordinates(nextCoords, DEMO_CENTER),
           status: "active",
           source: "device",
           message: "Device location"

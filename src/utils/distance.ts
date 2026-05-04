@@ -1,10 +1,15 @@
 import type { Coordinates } from "../types";
+import { isValidCoordinates } from "./coordinates";
 
 const EARTH_RADIUS_KM = 6371;
 
 const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
 
 export const distanceInKm = (from: Coordinates, to: Coordinates) => {
+  if (!isValidCoordinates(from) || !isValidCoordinates(to)) {
+    return Number.POSITIVE_INFINITY;
+  }
+
   const deltaLat = toRadians(to.lat - from.lat);
   const deltaLng = toRadians(to.lng - from.lng);
   const fromLat = toRadians(from.lat);
