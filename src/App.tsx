@@ -63,15 +63,22 @@ const userIcon = L.divIcon({
 });
 
 const focusMapOn = (map: L.Map, station: RankedStation | undefined, coords: Coordinates) => {
-  const focus = station && isValidCoordinates(station) ? station : coords;
+  const hasValidStation = station && isValidCoordinates(station);
+  const focus = hasValidStation ? station : coords;
 
   if (!isValidCoordinates(focus)) {
     return;
   }
 
-  map.flyTo([focus.lat, focus.lng], station ? 14 : 13, {
-    animate: true,
-    duration: 0.65
+  const container = map.getContainer();
+
+  if (container.clientWidth === 0 || container.clientHeight === 0) {
+    return;
+  }
+
+  map.invalidateSize();
+  map.setView([focus.lat, focus.lng], hasValidStation ? 14 : 13, {
+    animate: false
   });
 };
 
@@ -85,7 +92,11 @@ function MapFocus({
   const map = useMap();
 
   useEffect(() => {
-    focusMapOn(map, selectedStation, coords);
+    const frameId = window.requestAnimationFrame(() => {
+      focusMapOn(map, selectedStation, coords);
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
   }, [coords, map, selectedStation]);
 
   return null;
@@ -393,6 +404,9 @@ function DetailPane({
 export default function App() {
   const [demoMode, setDemoMode] = useState(getInitialDemoMode);
   const [view, setView] = useState<ViewMode>("list");
+  const [isDesktopLayout, setIsDesktopLayout] = useState(() =>
+    typeof window === "undefined" ? true : window.matchMedia("(min-width: 980px)").matches
+  );
   const [availableOnly, setAvailableOnly] = useState(false);
   const [selectedId, setSelectedId] = useState(stations[0]?.id ?? "");
   const [manualOverlays, setManualOverlays] = useState<Record<string, StationStatusOverlay>>({});
@@ -405,6 +419,28 @@ export default function App() {
     () => withFallbackCoordinates(location.coords, DEMO_CENTER),
     [location.coords]
   );
+  const shouldRenderList = isDesktopLayout || view === "list";
+  const shouldRenderMap = isDesktopLayout || view === "map";
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 980px)");
+    const handleChange = () => setIsDesktopLayout(mediaQuery.matches);
+
+    handleChange();
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", handleChange);
+      return () => mediaQuery.removeEventListener("change", handleChange);
+    }
+
+    const legacyMediaQuery = mediaQuery as MediaQueryList & {
+      addListener?: (listener: () => void) => void;
+      removeListener?: (listener: () => void) => void;
+    };
+
+    legacyMediaQuery.addListener?.(handleChange);
+    return () => legacyMediaQuery.removeListener?.(handleChange);
+  }, []);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -542,74 +578,78 @@ export default function App() {
       </div>
 
       <main className="workspace" data-view={view}>
-        <section className="list-pane" aria-label="Ranked charging stations">
-          <div className="location-strip">
-            <span>
-              <LocateFixed size={16} />
-              {location.message}
-            </span>
-            {safeUserCoords.accuracy && <span>+/- {Math.round(safeUserCoords.accuracy)} m</span>}
-          </div>
-
-          <div className="summary-strip">
-            <div>
-              <strong>{availableStationCount}</strong>
-              <span>available</span>
+        {shouldRenderList && (
+          <section className="list-pane" aria-label="Ranked charging stations">
+            <div className="location-strip">
+              <span>
+                <LocateFixed size={16} />
+                {location.message}
+              </span>
+              {safeUserCoords.accuracy && <span>+/- {Math.round(safeUserCoords.accuracy)} m</span>}
             </div>
-            <div>
-              <strong>{openSlotCount}</strong>
-              <span>open slots</span>
+
+            <div className="summary-strip">
+              <div>
+                <strong>{availableStationCount}</strong>
+                <span>available</span>
+              </div>
+              <div>
+                <strong>{openSlotCount}</strong>
+                <span>open slots</span>
+              </div>
+              <div>
+                <strong>{rankedStations.length}</strong>
+                <span>stations</span>
+              </div>
             </div>
-            <div>
-              <strong>{rankedStations.length}</strong>
-              <span>stations</span>
+
+            <div className="filter-row">
+              <button
+                type="button"
+                className={!availableOnly ? "active" : ""}
+                onClick={() => setAvailableOnly(false)}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                className={availableOnly ? "active" : ""}
+                onClick={() => setAvailableOnly(true)}
+              >
+                Available
+              </button>
+              <button
+                type="button"
+                className={demoMode ? "active" : ""}
+                onClick={() => setDemoMode((enabled) => !enabled)}
+              >
+                Demo
+              </button>
             </div>
-          </div>
 
-          <div className="filter-row">
-            <button
-              type="button"
-              className={!availableOnly ? "active" : ""}
-              onClick={() => setAvailableOnly(false)}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              className={availableOnly ? "active" : ""}
-              onClick={() => setAvailableOnly(true)}
-            >
-              Available
-            </button>
-            <button
-              type="button"
-              className={demoMode ? "active" : ""}
-              onClick={() => setDemoMode((enabled) => !enabled)}
-            >
-              Demo
-            </button>
-          </div>
+            <div className="station-feed">
+              {visibleStations.map((station) => (
+                <StationCard
+                  key={station.id}
+                  station={station}
+                  selected={selectedStation?.id === station.id}
+                  onSelect={() => selectStation(station)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
-          <div className="station-feed">
-            {visibleStations.map((station) => (
-              <StationCard
-                key={station.id}
-                station={station}
-                selected={selectedStation?.id === station.id}
-                onSelect={() => selectStation(station)}
-              />
-            ))}
-          </div>
-        </section>
-
-        <section className="map-pane" aria-label="Charging station map">
-          <StationMap
-            stations={visibleStations}
-            selectedStation={selectedStation}
-            userCoords={safeUserCoords}
-            onSelectStation={selectStation}
-          />
-        </section>
+        {shouldRenderMap && (
+          <section className="map-pane" aria-label="Charging station map">
+            <StationMap
+              stations={visibleStations}
+              selectedStation={selectedStation}
+              userCoords={safeUserCoords}
+              onSelectStation={selectStation}
+            />
+          </section>
+        )}
 
         <DetailPane
           station={selectedStation}
